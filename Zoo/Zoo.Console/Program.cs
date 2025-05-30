@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Concurrent;
+using System.Linq;
+using System.Threading.Tasks;
 using Zoo.Common.Models;
 using Zoo.Common.Services;
 
@@ -6,26 +9,41 @@ namespace Zoo.Console
 {
     internal class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
-            var animalService = new CrudService<Animal>();
+            var filePath = "animals.json";
+            var animalService = new CrudServiceAsync<Animal>(filePath);
+            var animals = new ConcurrentBag<Animal>();
 
-            var lion = new Lion("Симба");
-            lion.OnSpeak += System.Console.WriteLine;
-
-            var parrot = new Bird("Полi");
-            parrot.OnSpeak += System.Console.WriteLine;
-
-            animalService.Create(lion);
-            animalService.Create(parrot);
-
-            foreach (var animal in animalService.ReadAll())
+            // Паралельне створення 1000 об'єктів
+            await Task.Run(() =>
             {
-                System.Console.WriteLine(animal.Describe());
-                animal.Speak();
+                Parallel.For(0, 1000, i =>
+                {
+                    var lion = Lion.CreateNew();
+                    animals.Add(lion);
+                });
+            });
+
+            foreach (var animal in animals)
+            {
+                await animalService.CreateAsync(animal);
             }
 
-            System.Console.WriteLine($"\nВсього тваринок: {Animal.TotalAnimals}");
+            // Обчислення мінімального, максимального та середнього значень довжини імен
+            var nameLengths = animals.Select(a => a.Name.Length);
+            var min = nameLengths.Min();
+            var max = nameLengths.Max();
+            var avg = nameLengths.Average();
+
+            System.Console.WriteLine($"Мiнiмальна довжина iменi: {min}");
+            System.Console.WriteLine($"Максимальна довжина iменi: {max}");
+            System.Console.WriteLine($"Середня довжина iменi: {avg:F2}");
+
+            // Збереження у файл
+            await animalService.SaveAsync();
+
+            System.Console.WriteLine("Данi збережено!");
         }
     }
 }
